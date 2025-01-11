@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 
 def evaluate(prediction, ground_truth, mask, report=False):
@@ -8,8 +7,8 @@ def evaluate(prediction, ground_truth, mask, report=False):
     # mse
     performance['mse'] = np.linalg.norm((prediction - ground_truth) * mask) ** 2 / np.sum(mask)
     # IC
-    df_pred = pd.DataFrame(prediction * mask)
-    df_gt = pd.DataFrame(ground_truth * mask)
+    pred_mask = np.ma.masked_invalid(prediction * mask)
+    gt_mask = np.ma.masked_invalid(ground_truth * mask)
 
     ic = []
     mrr_top = 0.0
@@ -23,7 +22,7 @@ def evaluate(prediction, ground_truth, mask, report=False):
 
     for i in range(prediction.shape[1]):
         # IC
-        ic.append(df_pred[i].corr(df_gt[i]))
+        ic.append(np.ma.corrcoef(pred_mask[:,i], gt_mask[:,i])[0, 1])
 
         rank_gt = np.argsort(ground_truth[:, i])
         gt_top1 = set()

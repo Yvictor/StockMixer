@@ -25,6 +25,6 @@ In order to improve file reading speed, we process the raw data to generate corr
 
 ```
 # edit configurations in train.py
-python src/train.py
+uv run train
 ```
 

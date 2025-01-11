@@ -1,0 +1,28 @@
+[project]
+name = "stockmixer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "yvictor", email = "yvictor3141@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.2.1",
+    "pyyaml>=6.0.2",
+    "torch>=2.5.1",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+stockmixer = "stockmixer:main"
+train = "stockmixer.train:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "ipykernel>=6.29.5",
+]

@@ -4,23 +4,16 @@ import torch.nn.functional as F
 
 acv = nn.GELU()
 
+
 def get_loss(prediction, ground_truth, base_price, mask, batch_size, alpha):
     device = prediction.device
     all_one = torch.ones(batch_size, 1, dtype=torch.float32).to(device)
     return_ratio = torch.div(torch.sub(prediction, base_price), base_price)
     reg_loss = F.mse_loss(return_ratio * mask, ground_truth * mask)
-    pre_pw_dif = torch.sub(
-        return_ratio @ all_one.t(),
-        all_one @ return_ratio.t()
-    )
-    gt_pw_dif = torch.sub(
-        all_one @ ground_truth.t(),
-        ground_truth @ all_one.t()
-    )
+    pre_pw_dif = torch.sub(return_ratio @ all_one.t(), all_one @ return_ratio.t())
+    gt_pw_dif = torch.sub(all_one @ ground_truth.t(), ground_truth @ all_one.t())
     mask_pw = mask @ mask.t()
-    rank_loss = torch.mean(
-        F.relu(pre_pw_dif * gt_pw_dif * mask_pw)
-    )
+    rank_loss = torch.mean(F.relu(pre_pw_dif * gt_pw_dif * mask_pw))
     loss = reg_loss + alpha * rank_loss
     return loss, reg_loss, rank_loss, return_ratio
 
@@ -69,17 +62,12 @@ class TriU(nn.Module):
     def __init__(self, time_step):
         super(TriU, self).__init__()
         self.time_step = time_step
-        self.triU = nn.ParameterList(
-            [
-                nn.Linear(i + 1, 1)
-                for i in range(time_step)
-            ]
-        )
+        self.triU = nn.ParameterList([nn.Linear(i + 1, 1) for i in range(time_step)])
 
     def forward(self, inputs):
         x = self.triU[0](inputs[:, :, 0].unsqueeze(-1))
         for i in range(1, self.time_step):
-            x = torch.cat([x, self.triU[i](inputs[:, :, 0:i + 1])], dim=-1)
+            x = torch.cat([x, self.triU[i](inputs[:, :, 0 : i + 1])], dim=-1)
         return x
 
 
@@ -103,17 +91,27 @@ class MultiScaleTimeMixer(nn.Module):
         super(MultiScaleTimeMixer, self).__init__()
         self.time_step = time_step
         self.scale_count = scale_count
-        self.mix_layer = nn.ParameterList([nn.Sequential(
-            nn.Conv1d(in_channels=channel, out_channels=channel, kernel_size=2 ** i, stride=2 ** i),
-            TriU(int(time_step / 2 ** i)),
-            nn.Hardswish(),
-            TriU(int(time_step / 2 ** i))
-        ) for i in range(scale_count)])
+        self.mix_layer = nn.ParameterList(
+            [
+                nn.Sequential(
+                    nn.Conv1d(
+                        in_channels=channel,
+                        out_channels=channel,
+                        kernel_size=2**i,
+                        stride=2**i,
+                    ),
+                    TriU(int(time_step / 2**i)),
+                    nn.Hardswish(),
+                    TriU(int(time_step / 2**i)),
+                )
+                for i in range(scale_count)
+            ]
+        )
         self.mix_layer[0] = nn.Sequential(
             nn.LayerNorm([time_step, channel]),
             TriU(int(time_step)),
             nn.Hardswish(),
-            TriU(int(time_step))
+            TriU(int(time_step)),
         )
 
     def forward(self, x):
@@ -181,7 +179,9 @@ class StockMixer(nn.Module):
         self.mixer = MultTime2dMixer(time_steps, channels, scale_dim=scale_dim)
         self.channel_fc = nn.Linear(channels, 1)
         self.time_fc = nn.Linear(time_steps * 2 + scale_dim, 1)
-        self.conv = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=2, stride=2)
+        self.conv = nn.Conv1d(
+            in_channels=channels, out_channels=channels, kernel_size=2, stride=2
+        )
         self.stock_mixer = NoGraphMixer(stocks, market)
         self.time_fc_ = nn.Linear(time_steps * 2 + scale_dim, 1)
 
@@ -196,4 +196,3 @@ class StockMixer(nn.Module):
         y = self.time_fc(y)
         z = self.time_fc_(z)
         return y + z
-
